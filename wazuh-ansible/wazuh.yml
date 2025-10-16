@@ -2,7 +2,7 @@
   become: yes
   become_user: root
   roles:
-    - ../roles/wazuh/ansible-wazuh-agent
+    - roles/wazuh/ansible-wazuh-agent
   vars:
     wazuh_managers:
       - address: 10.10.1.209
