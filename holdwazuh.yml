@@ -1,0 +1,16 @@
+- name: Desabilitar atualizações automáticas do Wazuh
+  hosts: all
+  become: yes
+  tasks:
+    - name: Bloquear pacotes do Wazuh para atualizações automáticas
+      shell: apt-mark hold wazuh-manager wazuh-agent wazuh-dashboard wazuh-indexer
+      register: apt_mark_output
+
+    - name: Verificar se os pacotes foram bloqueados
+      debug:
+        msg: "Pacotes bloqueados: {{ apt_mark_output.stdout }}"  
+
+    - name: Reiniciar o sistema
+      reboot:
+        msg: "Reiniciando o sistema após configurar bloqueio de pacotes."
+        pre_reboot_delay: 10  # Atraso antes de reiniciar    

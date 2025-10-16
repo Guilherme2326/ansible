@@ -1,0 +1,147 @@
+---
+- name: Atualizar componentes do Wazuh em cluster
+  hosts: all
+  become: yes
+  vars_files:
+    - vars.yml  # Carregar variáveis externas
+
+  tasks:
+    - name: Atualizar cache de pacotes
+      apt:
+        update_cache: yes
+
+    # ================
+    # Atualizando o Wazuh Indexer (Executar em cada nó separadamente)
+    # ================
+    - name: Desabilitar alocação de shards no Indexer
+      uri:
+        url: "https://{{ item.ip }}:9200/_cluster/settings"
+        method: PUT
+        user: "{{ wazuh_credentials.username }}"
+        password: "{{ wazuh_credentials.password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "persistent": {
+              "cluster.routing.allocation.enable": "primaries"
+            }
+          }
+        status_code: 200
+      loop: "{{ wazuh_indexers }}"
+
+    - name: Atualizar Wazuh Indexer
+      apt:
+        name: wazuh-indexer
+        state: latest
+      loop: "{{ wazuh_indexers }}"
+
+    - name: Reiniciar e habilitar o Wazuh Indexer
+      systemd:
+        name: wazuh-indexer
+        enabled: yes
+        state: restarted
+      loop: "{{ wazuh_indexers }}"
+
+    - name: Reativar alocação de shards no Indexer
+      uri:
+        url: "https://{{ item.ip }}:9200/_cluster/settings"
+        method: PUT
+        user: "{{ wazuh_credentials.username }}"
+        password: "{{ wazuh_credentials.password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "persistent": {
+              "cluster.routing.allocation.enable": "all"
+            }
+          }
+        status_code: 200
+      loop: "{{ wazuh_indexers }}"
+
+    # ================
+    # Atualizando o Wazuh Manager
+    # ================
+    - name: Atualizar Wazuh Manager
+      apt:
+        name: wazuh-manager
+        state: latest
+      when: "'wazuh-manager' in ansible_facts.packages"
+
+    - name: Reiniciar e habilitar o Wazuh Manager
+      systemd:
+        name: wazuh-manager
+        enabled: yes
+        state: restarted
+
+    # ================
+    # Configuração do Wazuh Manager (Vulnerability Detection)
+    # ================
+    - name: Configurar Vulnerability Detection no Manager
+      blockinfile:
+        path: /var/ossec/etc/ossec.conf
+        marker: "<!-- Vulnerability Detection -->"
+        block: |
+          <vulnerability-detection>
+            <enabled>yes</enabled>
+            <index-status>yes</index-status>
+            <feed-update-interval>60m</feed-update-interval>
+          </vulnerability-detection>
+
+    - name: Configurar Indexer no Wazuh Manager
+      blockinfile:
+        path: /var/ossec/etc/ossec.conf
+        marker: "<!-- Indexer Configuration -->"
+        block: |
+          <indexer>
+            <enabled>yes</enabled>
+            <hosts>
+            {% for node in wazuh_indexers %}
+              <host>https://{{ node.ip }}:9200</host>
+            {% endfor %}
+            </hosts>
+            <ssl>
+              <certificate_authorities>
+                <ca>{{ filebeat_certificates.root_ca }}</ca>
+              </certificate_authorities>
+              <certificate>{{ filebeat_certificates.cert }}</certificate>
+              <key>{{ filebeat_certificates.key }}</key>
+            </ssl>
+          </indexer>
+
+    # ================
+    # Atualizando o Wazuh Dashboard
+    # ================
+    - name: Atualizar Wazuh Dashboard
+      apt:
+        name: wazuh-dashboard
+        state: latest
+
+    - name: Reiniciar e habilitar o Wazuh Dashboard
+      systemd:
+        name: wazuh-dashboard
+        enabled: yes
+        state: restarted
+
+    # ================
+    # Atualizando e Configurando o Filebeat
+    # ================
+    - name: Baixar e instalar módulo do Wazuh para Filebeat
+      shell: |
+        curl -s https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.4.tar.gz | sudo tar -xvz -C /usr/share/filebeat/module
+
+    - name: Baixar template de alerts do Wazuh
+      shell: |
+        curl -so /etc/filebeat/wazuh-template.json https://raw.githubusercontent.com/wazuh/wazuh/v4.10.1/extensions/elasticsearch/7.x/wazuh-template.json
+        chmod go+r /etc/filebeat/wazuh-template.json
+
+    - name: Reiniciar e habilitar o Filebeat
+      systemd:
+        name: filebeat
+        enabled: yes
+        state: restarted

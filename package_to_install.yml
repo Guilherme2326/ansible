@@ -1,0 +1,17 @@
+---
+- name: Instalar pacote escolhido pelo usuário
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars_prompt:
+    - name: "nome_pacote"
+      prompt: "Digite o nome do pacote que deseja instalar:"
+      private: no
+
+  tasks:
+    - name: Instalar o pacote informado
+      package:
+        name: "{{ nome_pacote }}"
+        state: present
+        

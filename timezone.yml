@@ -1,0 +1,42 @@
+---
+- name: Verificar configuração de fuso e hora no servidor
+  hosts: all
+  become: yes
+  tasks:
+    - name: Obter informações do timedatectl
+      command: timedatectl
+      register: timedatectl_output
+
+    - name: Exibir saída do timedatectl
+      debug:
+        msg: "{{ timedatectl_output.stdout_lines }}"
+
+    - name: Verificar se o fuso horário é America/Sao_Paulo
+      assert:
+        that:
+          - "'America/Sao_Paulo' in timedatectl_output.stdout"
+        fail_msg: "Fuso horário não configurado para America/Sao_Paulo!"
+        success_msg: "Fuso horário configurado corretamente para America/Sao_Paulo."
+
+    - name: Obter data e hora atual
+      command: date "+%Y-%m-%d %H:%M:%S %Z"
+      register: date_output
+
+    - name: Exibir data e hora atual
+      debug:
+        msg: "Data e hora atual: {{ date_output.stdout }}"
+
+    - name: Verificar o link simbólico de /etc/localtime
+      command: readlink -f /etc/localtime
+      register: localtime_link
+
+    - name: Exibir caminho apontado por /etc/localtime
+      debug:
+        msg: "/etc/localtime aponta para: {{ localtime_link.stdout }}"
+
+    - name: Confirmar que /etc/localtime aponta para America/Sao_Paulo
+      assert:
+        that:
+          - "'America/Sao_Paulo' in localtime_link.stdout"
+        fail_msg: "/etc/localtime não aponta para America/Sao_Paulo!"
+        success_msg: "/etc/localtime configurado corretamente para America/Sao_Paulo."

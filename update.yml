@@ -1,0 +1,27 @@
+- name: Atualizar pacotes nos servidores
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Atualizar pacotes no Debian/Ubuntu
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+
+    - name: Atualizar pacotes no Red Hat/CentOS
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Atualizar pacotes no Fedora
+      dnf:
+        name: "*"
+        state: latest
+      when: ansible_distribution == "Fedora"
+
+    - name: Limpar pacotes não utilizados no Debian/Ubuntu
+      apt:
+        autoremove: yes
+      when: ansible_os_family == "Debian"

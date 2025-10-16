@@ -1,0 +1,67 @@
+- name: Instalar e configurar Zabbix Agent em múltiplas máquinas
+  hosts: all
+  gather_facts: yes
+  become: true
+
+  vars:
+    zabbix_server_ip: "10.10.1.106"
+    zabbix_agent_version: "7.2.5"
+    zabbix_installer_url: "https://cdn.zabbix.com/zabbix/binaries/stable/7.2/7.2.5/zabbix_agent-7.2.5-windows-amd64-openssl.msi"
+    installer_path: "C:\\Windows\\Temp\\zabbix_agent-{{ zabbix_agent_version }}.msi"
+    zabbix_conf_path: "C:\\Program Files\\Zabbix Agent\\zabbix_agentd.conf"
+
+  tasks:
+
+    - name: Baixar instalador do Zabbix Agent
+      win_get_url:
+        url: "{{ zabbix_installer_url | trim }}"
+        dest: "{{ installer_path }}"
+      when: ansible_os_family == 'Windows'
+
+    - name: Instalar Zabbix Agent via MSI com todos os parâmetros
+      win_package:
+        path: "{{ installer_path }}"
+        state: present
+        arguments: >-
+          /qn /norestart
+          ENABLEPATH=1
+          SERVER={{ zabbix_server_ip }}
+          SERVERACTIVE={{ zabbix_server_ip }}
+          HOSTNAMEITEM=system.hostname
+          HOSTMETADATA=Windows
+          HOSTMETADATAITEM=system.uname
+      when: ansible_os_family == 'Windows'
+
+    - name: Ajustar zabbix_agentd.conf para hostname dinâmico e metadata
+      when: ansible_os_family == 'Windows'
+      block:
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*Server='
+            line: "Server={{ zabbix_server_ip }}"
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*ServerActive='
+            line: "ServerActive={{ zabbix_server_ip }}"
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*Hostname\s*='
+            state: absent
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*HostnameItem='
+            line: "HostnameItem=system.hostname"
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*HostMetadata='
+            line: "HostMetadata=Windows"
+
+        - win_lineinfile:
+            path: "{{ zabbix_conf_path }}"
+            regexp: '^\s*HostMetadataItem='
+            line: "HostMetadataItem=system.uname"

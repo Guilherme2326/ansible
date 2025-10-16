@@ -1,0 +1,78 @@
+- name: Instalar e configurar Zabbix Agent em máquinas Ubuntu
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    zabbix_server_ip: "10.10.1.106"
+    zabbix_agent_version: "7.0"
+    zabbix_hostname: "{{ ansible_hostname }}"
+    zabbix_hostname_item: "{{ ansible_hostname }}"
+    zabbix_host_metadata: "Linux"
+    zabbix_host_metadata_item: "system.uname"
+
+  tasks:
+
+    - name: Limpar cache APT
+      apt:
+        clean: yes
+
+    - name: Remover qualquer .deb antigo ou corrompido
+      file:
+        path: /tmp/zabbix-release.deb
+        state: absent
+
+    - name: Instalar pré-requisitos
+      apt:
+        name:
+          - wget
+          - gnupg
+          - apt-transport-https
+          - ca-certificates
+        state: present
+        update_cache: yes
+        force_apt_get: yes
+
+    - name: Baixar pacote do repositório Zabbix (Debian/Ubuntu) usando wget
+      command: >
+          wget "https://repo.zabbix.com/zabbix/{{ zabbix_agent_version }}/ubuntu/pool/main/z/zabbix-release/zabbix-release_{{ zabbix_agent_version }}-1+ubuntu{{ ansible_distribution_version }}_all.deb" -O /tmp/zabbix-release.deb
+        
+      args:
+        creates: /tmp/zabbix-release.deb
+
+    - name: Instalar repositório Zabbix
+      apt:
+        deb: /tmp/zabbix-release.deb
+        state: present
+        update_cache: yes
+
+    - name: Instalar Zabbix Agent
+      apt:
+        name: zabbix-agent
+        state: latest
+        update_cache: yes
+      register: install_agent
+
+    - name: Recarregar unidades systemd após instalar o agente
+      command: systemctl daemon-reload
+      when: install_agent.changed
+
+    - name: Configurar zabbix_agentd.conf
+      lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: '^Server=',           line: "Server={{ zabbix_server_ip }}" }
+        - { regexp: '^ServerActive=',     line: "ServerActive={{ zabbix_server_ip }}" }
+        - { regexp: '^Hostname=',         line: "Hostname={{ zabbix_hostname }}" }
+        - { regexp: '^HostnameItem=',     line: "HostnameItem={{ zabbix_hostname_item }}" }
+        - { regexp: '^HostMetadata=',     line: "HostMetadata={{ zabbix_host_metadata }}" }
+        - { regexp: '^HostMetadataItem=', line: "HostMetadataItem={{ zabbix_host_metadata_item }}" }
+
+
+    - name: Reiniciar e habilitar Zabbix Agent
+      service:
+        name: zabbix-agent
+        state: started
+        enabled: yes

@@ -1,0 +1,68 @@
+- name: Remover Zabbix Agent de múltiplas máquinas
+  hosts: all
+  become: true
+  gather_facts: yes
+
+  vars:
+    zabbix_service_name: "zabbix-agent.service"
+    # Para Debian/Ubuntu
+    zabbix_repo_package_name: "zabbix-release"
+
+  handlers:
+    - name: stop zabbix agent
+      service:
+        name: "{{ zabbix_service_name }}"
+        state: stopped
+
+    - name: disable zabbix agent
+      service:
+        name: "{{ zabbix_service_name }}"
+        enabled: false
+
+  tasks:
+    - name: Carregar fatos de pacotes
+      ansible.builtin.package_facts:
+
+    - name: Remover pacote e repositório (quando aplicável)
+      package:
+        name:
+          - "{{ zabbix_service_name.split('.service')[0] }}"
+          - "{{ zabbix_repo_package_name }}"
+        state: absent
+        purge: yes       # só afeta apt
+      when:
+        - ansible_facts.packages[zabbix_service_name.split('.service')[0]] is defined or
+          ansible_facts.packages[zabbix_repo_package_name] is defined
+      notify:
+        - stop zabbix agent
+        - disable zabbix agent
+
+    - name: Atualizar cache de pacotes (Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when:
+        - ansible_os_family == "Debian"
+        - ansible_facts.packages[zabbix_service_name.split('.service')[0]] is defined or
+          ansible_facts.packages[zabbix_repo_package_name] is defined
+
+    - name: Remover configurações e diretórios remanescentes
+      file:
+        path: "{{ item }}"
+        state: absent
+        recurse: yes
+      loop:
+        - /etc/zabbix
+        - /run/zabbix
+
+    - name: Coletar fatos de serviço
+      service_facts:
+
+    - name: Mostrar status do Zabbix Agent
+      debug:
+        msg: >-
+          {% set svc = zabbix_service_name %}
+          {% if svc in ansible_facts.services %}
+            Serviço {{ svc }}: {{ ansible_facts.services[svc].state }}
+          {% else %}
+            Serviço {{ svc }} ausente
+          {% endif %}

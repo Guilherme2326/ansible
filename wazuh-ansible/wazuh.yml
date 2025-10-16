@@ -1,0 +1,21 @@
+- hosts: all
+  become: yes
+  become_user: root
+  roles:
+    - ../roles/wazuh/ansible-wazuh-agent
+  vars:
+    wazuh_managers:
+      - address: 10.10.1.200
+        port: 1514
+        protocol: tcp
+        max_retries: 5
+        retry_interval: 5
+    wazuh_agent_authd:
+      registration_address: 10.10.1.201
+      enable: true
+      port: 1515
+      ssl_agent_ca: null
+      ssl_auto_negotiate: "no"
+
+
+      

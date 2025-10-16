@@ -1,0 +1,23 @@
+---
+wazuh_indexers:
+  - ip: "10.10.1.200"
+  - ip: "10.10.1.205"
+
+wazuh_manager:
+  ip: "10.10.1.201"
+  ip: "10.10.1.203"
+  ip: "10.10.1.204"
+
+
+
+wazuh_dashboard:
+  ip: "10.10.1.202"
+
+wazuh_credentials:
+  username: "admin"
+  password: "SenhaPadrão"  # Irá ser sobrescrita pelo Semaphore
+
+filebeat_certificates:
+  root_ca: "/etc/filebeat/certs/root-ca.pem"
+  cert: "/etc/filebeat/certs/filebeat.pem"
+  key: "/etc/filebeat/certs/filebeat-key.pem"
